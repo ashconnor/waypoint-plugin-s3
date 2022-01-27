@@ -9,8 +9,8 @@ import (
 )
 
 type RegistryConfig struct {
-	Name    string "hcl:name"
-	Version string "hcl:version"
+	Name    string `hcl:"name"`
+	Version string `hcl:"version"`
 }
 
 type Registry struct {
@@ -27,15 +27,24 @@ func (r *Registry) ConfigSet(config interface{}) error {
 	c, ok := config.(*RegistryConfig)
 	if !ok {
 		// The Waypoint SDK should ensure this never gets hit
-		return fmt.Errorf("Expected *RegisterConfig as parameter")
+		return fmt.Errorf("expected *RegisterConfig as parameter")
 	}
 
 	// validate the config
 	if c.Name == "" {
-		return fmt.Errorf("Name must be set to a valid directory")
+		return fmt.Errorf("name must be set to a valid directory")
 	}
 
 	return nil
+}
+
+// Implement Registry
+func (r *Registry) AccessInfoFunc() interface{} {
+	return r.accessInfo
+}
+
+func (r *Registry) accessInfo() (*AccessInfo, error) {
+	return &AccessInfo{}, nil
 }
 
 // Implement Registry
@@ -67,12 +76,12 @@ func (r *Registry) PushFunc() interface{} {
 // as an input parameter.
 // If an error is returned, Waypoint stops the execution flow and
 // returns an error to the user.
-func (r *Registry) push(ctx context.Context, ui terminal.UI, binary *builder.Zip) (*Artifact, error) {
+func (r *Registry) push(ctx context.Context, ui terminal.UI, binary *builder.Zip) (*Zip, error) {
 	u := ui.Status()
 	defer u.Close()
 	u.Update("Pushing binary to registry")
 
-	return &Artifact{}, nil
+	return &Zip{
+		Path: binary.Path,
+	}, nil
 }
-
-// Implement Authenticator

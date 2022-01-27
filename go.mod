@@ -3,6 +3,7 @@ module github.com/hashicorp/waypoint-plugin-s3
 go 1.17
 
 require (
+	github.com/aws/aws-sdk-go v1.15.11
 	github.com/docker/docker v20.10.12+incompatible
 	github.com/hashicorp/go-hclog v0.16.1
 	github.com/hashicorp/waypoint-plugin-sdk v0.0.0-20211012192505-5c78341a47e4
@@ -30,6 +31,7 @@ require (
 	github.com/docker/go-connections v0.4.0 // indirect
 	github.com/docker/go-units v0.4.0 // indirect
 	github.com/fatih/color v1.12.0 // indirect
+	github.com/go-ini/ini v1.25.4 // indirect
 	github.com/gogo/protobuf v1.3.2 // indirect
 	github.com/golang/groupcache v0.0.0-20200121045136-8c9f03a8e57e // indirect
 	github.com/golang/protobuf v1.5.2 // indirect
@@ -43,6 +45,7 @@ require (
 	github.com/hashicorp/hcl/v2 v2.10.1-0.20210621220818-327f3ce2570e // indirect
 	github.com/hashicorp/yamux v0.0.0-20210316155119-a95892c5f864 // indirect
 	github.com/iancoleman/strcase v0.1.2 // indirect
+	github.com/jmespath/go-jmespath v0.0.0-20160803190731-bd40a432e4c7 // indirect
 	github.com/kr/pretty v0.3.0 // indirect
 	github.com/kr/text v0.2.0 // indirect
 	github.com/lab47/vterm v0.0.0-20201001232628-a9dd795f94c2 // indirect

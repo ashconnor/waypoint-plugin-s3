@@ -70,7 +70,7 @@ func (rm *ReleaseManager) resourceReleaseDestroy(
 	log hclog.Logger,
 	st terminal.Status,
 	ui terminal.UI,
-	artifact *registry.Artifact,
+	zip *registry.Zip,
 	result *Release,
 ) error {
 	// Create your deployment resource here!

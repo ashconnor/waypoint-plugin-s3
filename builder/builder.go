@@ -151,13 +151,12 @@ func (b *Builder) build(ctx context.Context, src *component.Source, ui terminal.
 		RebaseName: "", // TODO: Follow symbolic links
 	}
 
-	dir, err := os.MkdirTemp("", "waypoint-plugin-s3")
+	destDir, err := os.MkdirTemp("", "waypoint-plugin-s3")
 	if err != nil {
 		return nil, status.Errorf(codes.FailedPrecondition, "unable to create tmp directory: %s", err)
 	}
-	defer os.RemoveAll(dir)
 
-	archive.CopyTo(content, srcInfo, dir)
+	archive.CopyTo(content, srcInfo, destDir)
 
 	step.Done()
 
@@ -168,12 +167,14 @@ func (b *Builder) build(ctx context.Context, src *component.Source, ui terminal.
 
 	step.Done()
 
-	step = sg.Add("Zipping assets...")
-	defer step.Abort()
+	// step = sg.Add("Zipping assets...")
+	// defer step.Abort()
 
-	dockerClient.ContainerRemove(ctx, containerResp.ID, types.ContainerRemoveOptions{Force: true})
+	// // TODO zip files
 
-	step.Done()
+	// step.Done()
 
-	return &Zip{}, nil
+	return &Zip{
+		Path: destDir,
+	}, nil
 }

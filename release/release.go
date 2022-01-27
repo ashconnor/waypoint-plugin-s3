@@ -114,7 +114,7 @@ func (rm *ReleaseManager) release(
 	log hclog.Logger,
 	dcr *component.DeclaredResourcesResp,
 	ui terminal.UI,
-	artifact *registry.Artifact,
+	artifact *registry.Zip,
 ) (*Release, error) {
 	u := ui.Status()
 	defer u.Close()
@@ -147,7 +147,7 @@ func (rm *ReleaseManager) status(
 	ji *component.JobInfo,
 	log hclog.Logger,
 	ui terminal.UI,
-	artifact *registry.Artifact,
+	artifact *registry.Zip,
 	release *Release,
 ) (*sdk.StatusReport, error) {
 	sg := ui.StepGroup()
@@ -186,7 +186,7 @@ func (rm *ReleaseManager) resourceReleaseCreate(
 	log hclog.Logger,
 	st terminal.Status,
 	ui terminal.UI,
-	artifact *registry.Artifact,
+	zip *registry.Zip,
 	result *Release,
 ) error {
 	// Create your release resource here!
@@ -198,7 +198,7 @@ func (rm *ReleaseManager) resourceReleaseStatus(
 	ctx context.Context,
 	ui terminal.UI,
 	sg terminal.StepGroup,
-	artifact *registry.Artifact,
+	zip *registry.Zip,
 ) error {
 	// Determine health status of "this" resource.
 	return nil

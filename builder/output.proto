@@ -6,5 +6,5 @@ package platform;
 option go_package = "github.com/hashicorp/waypoint-plugin-s3/builder";
 
 message Zip {
-  string location = 1;
+  string path = 1;
 }

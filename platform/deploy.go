@@ -3,19 +3,21 @@ package platform
 import (
 	"context"
 	"fmt"
+	"os"
+	"path/filepath"
 
+	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/session"
+	"github.com/aws/aws-sdk-go/service/s3/s3manager"
 	"github.com/hashicorp/go-hclog"
 	"github.com/hashicorp/waypoint-plugin-s3/registry"
 	"github.com/hashicorp/waypoint-plugin-sdk/component"
-	"github.com/hashicorp/waypoint-plugin-sdk/framework/resource"
-	sdk "github.com/hashicorp/waypoint-plugin-sdk/proto/gen"
 	"github.com/hashicorp/waypoint-plugin-sdk/terminal"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 )
 
 type DeployConfig struct {
-	Region string "hcl:directory,optional"
+	Region     string `hcl:"region,optional"`
+	BucketName string `hcl:"bucket_name,optional"`
 }
 
 type Platform struct {
@@ -32,12 +34,16 @@ func (p *Platform) ConfigSet(config interface{}) error {
 	c, ok := config.(*DeployConfig)
 	if !ok {
 		// The Waypoint SDK should ensure this never gets hit
-		return fmt.Errorf("Expected *DeployConfig as parameter")
+		return fmt.Errorf("expected *DeployConfig as parameter")
 	}
 
 	// validate the config
 	if c.Region == "" {
-		return fmt.Errorf("Region must be set to a valid directory")
+		return fmt.Errorf("region must be set to a valid AWS region")
+	}
+
+	if c.BucketName == "" {
+		return fmt.Errorf("bucket_name must be set to a valid S3 bucket")
 	}
 
 	return nil
@@ -51,41 +57,10 @@ func (p *Platform) getConnectContext() (interface{}, error) {
 	return nil, nil
 }
 
-// Resource manager will tell the Waypoint Plugin SDK how to create and delete
-// certain resources for your deployments.
-//
-// For example, your deployment might need to create a "container" or "load balancer".
-// Your plugin could implement two resources through ResourceManager and the Waypoint
-// Plugin SDK will automatically create or delete these resources as well as
-// obtain the defined status for them.
-//
-// ResourceManager can also be implemented for Release as well.
-func (p *Platform) resourceManager(log hclog.Logger, dcr *component.DeclaredResourcesResp) *resource.Manager {
-	return resource.NewManager(
-		resource.WithLogger(log.Named("resource_manager")),
-		resource.WithValueProvider(p.getConnectContext),
-		resource.WithDeclaredResourcesResp(dcr),
-		resource.WithResource(resource.NewResource(
-			resource.WithName("template_example"),
-			resource.WithState(&Resource_Deployment{}),
-			resource.WithCreate(p.resourceDeploymentCreate),
-			resource.WithDestroy(p.resourceDeploymentDestroy),
-			resource.WithStatus(p.resourceDeploymentStatus),
-			resource.WithPlatform("template_platform"),                                         // Update this to match your plugins platform, like Kubernetes
-			resource.WithCategoryDisplayHint(sdk.ResourceCategoryDisplayHint_INSTANCE_MANAGER), // This is meant for the UI to determine what kind of icon to show
-		)),
-		// NOTE: Add more resource funcs here if your plugin has more than 1 resource
-	)
-}
-
-// Implement Builder
+// Implement Platform
 func (p *Platform) DeployFunc() interface{} {
 	// return a function which will be called by Waypoint
 	return p.deploy
-}
-
-func (p *Platform) StatusFunc() interface{} {
-	return p.status
 }
 
 // A BuildFunc does not have a strict signature, you can define the parameters
@@ -102,7 +77,7 @@ func (p *Platform) StatusFunc() interface{} {
 // - terminal.UI
 // - *component.LabelSet
 
-// In addition to default input parameters the registry.Artifact from the Build step
+// In addition to default input parameters the registry.Zip from the Build step
 // can also be injected.
 //
 // The output parameters for BuildFunc must be a Struct which can
@@ -116,73 +91,66 @@ func (b *Platform) deploy(
 	ui terminal.UI,
 	log hclog.Logger,
 	dcr *component.DeclaredResourcesResp,
-	artifact *registry.Artifact,
+	zip *registry.Zip,
 ) (*Deployment, error) {
 	u := ui.Status()
 	defer u.Close()
 	u.Update("Deploy application")
+	// the session the S3 Uploader will use
+	sess := session.Must(session.NewSession(&aws.Config{Region: &b.config.Region}))
 
-	var result Deployment
+	// create an uploader with the session and default options
+	uploader := s3manager.NewUploader(sess)
 
-	// Create our resource manager and create deployment resources
-	rm := b.resourceManager(log, dcr)
+	// walk temp dir
+	objects := []s3manager.BatchUploadObject{}
 
-	// These params must match exactly to your resource manager functions. Otherwise
-	// they will not be invoked during CreateAll()
-	if err := rm.CreateAll(
-		ctx, log, u, ui,
-		artifact, &result,
-	); err != nil {
+	err := filepath.Walk(zip.Path, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+
+		stat, err := os.Stat(path)
+		if err != nil {
+			return err
+		}
+
+		if stat.IsDir() {
+			return nil
+		}
+
+		relativePath, err := filepath.Rel(zip.Path, path)
+		if err != nil {
+			return err
+		}
+
+		f, err := os.Open(path)
+		if err != nil {
+			return fmt.Errorf("failed to open file %q, %v", path, err)
+		}
+
+		objects = append(objects, s3manager.BatchUploadObject{Object: &s3manager.UploadInput{
+			Key:    aws.String(relativePath),
+			Bucket: aws.String(b.config.BucketName),
+			Body:   f,
+		}})
+
+		return nil
+	})
+
+	if err != nil {
 		return nil, err
 	}
 
-	// Store our resource state
-	result.ResourceState = rm.State()
+	iter := &s3manager.UploadObjectsIterator{Objects: objects}
+	err = uploader.UploadWithIterator(ctx, iter)
+	if err != nil {
+		return nil, err
+	}
 
 	u.Update("Application deployed")
 
 	return &Deployment{}, nil
-}
-
-// This function is the top level status command that gets invoked when Waypoint
-// attempts to determine the health of a dpeloyment. It will also invoke the
-// status for each resource involed for the given deployment if any.
-func (d *Platform) status(
-	ctx context.Context,
-	ji *component.JobInfo,
-	ui terminal.UI,
-	log hclog.Logger,
-	deployment *Deployment,
-) (*sdk.StatusReport, error) {
-	sg := ui.StepGroup()
-	s := sg.Add("Checking the status of the deployment...")
-
-	rm := d.resourceManager(log, nil)
-
-	// If we don't have resource state, this state is from an older version
-	// and we need to manually recreate it.
-	if deployment.ResourceState == nil {
-		rm.Resource("deployment").SetState(&Resource_Deployment{
-			Name: deployment.Id,
-		})
-	} else {
-		// Load our set state
-		if err := rm.LoadState(deployment.ResourceState); err != nil {
-			return nil, err
-		}
-	}
-
-	// This will call the StatusReport func on every defined resource in ResourceManager
-	report, err := rm.StatusReport(ctx, log, sg, ui)
-	if err != nil {
-		return nil, status.Errorf(codes.Internal, "resource manager failed to generate resource statuses: %s", err)
-	}
-
-	report.Health = sdk.StatusReport_UNKNOWN
-	s.Update("Deployment is currently not implemented!")
-	s.Done()
-
-	return report, nil
 }
 
 func (b *Platform) resourceDeploymentCreate(
@@ -190,7 +158,7 @@ func (b *Platform) resourceDeploymentCreate(
 	log hclog.Logger,
 	st terminal.Status,
 	ui terminal.UI,
-	artifact *registry.Artifact,
+	zip *registry.Zip,
 	result *Deployment,
 ) error {
 	// Create your deployment resource here!
@@ -202,7 +170,7 @@ func (b *Platform) resourceDeploymentStatus(
 	ctx context.Context,
 	ui terminal.UI,
 	sg terminal.StepGroup,
-	artifact *registry.Artifact,
+	zip *registry.Zip,
 ) error {
 	// Determine health status of "this" resource.
 	return nil
