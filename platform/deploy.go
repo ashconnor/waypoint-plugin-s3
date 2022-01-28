@@ -1,8 +1,10 @@
 package platform
 
 import (
+	"bytes"
 	"context"
 	"fmt"
+	"net/http"
 	"os"
 	"path/filepath"
 
@@ -129,10 +131,18 @@ func (b *Platform) deploy(
 			return fmt.Errorf("failed to open file %q, %v", path, err)
 		}
 
+		fileInfo, _ := f.Stat()
+		size := fileInfo.Size()
+
+		buffer := make([]byte, size)
+		f.Read(buffer)
+
 		objects = append(objects, s3manager.BatchUploadObject{Object: &s3manager.UploadInput{
-			Key:    aws.String(relativePath),
-			Bucket: aws.String(b.config.BucketName),
-			Body:   f,
+			Key:         aws.String(relativePath),
+			Bucket:      aws.String(b.config.BucketName),
+			Body:        bytes.NewReader(buffer),
+			ACL:         aws.String("public-read"),
+			ContentType: aws.String(http.DetectContentType(buffer)),
 		}})
 
 		return nil

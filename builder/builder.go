@@ -82,6 +82,7 @@ func (b *Builder) build(ctx context.Context, src *component.Source, ui terminal.
 		dockerfile = "Dockerfile"
 	}
 
+	// Build image
 	step := sg.Add("Building image...")
 	defer step.Abort()
 
@@ -121,6 +122,7 @@ func (b *Builder) build(ctx context.Context, src *component.Source, ui terminal.
 
 	step.Done()
 
+	// Run container
 	step = sg.Add("Running container...")
 	defer step.Abort()
 
@@ -135,6 +137,7 @@ func (b *Builder) build(ctx context.Context, src *component.Source, ui terminal.
 
 	step.Done()
 
+	// Extract files from container
 	step = sg.Add("Extracing assets...")
 	defer step.Abort()
 
@@ -160,6 +163,7 @@ func (b *Builder) build(ctx context.Context, src *component.Source, ui terminal.
 
 	step.Done()
 
+	// Kill container
 	step = sg.Add("Shutting down container...")
 	defer step.Abort()
 
